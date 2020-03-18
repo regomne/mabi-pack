@@ -1,0 +1,20 @@
+[package]
+name = "mabi-pack"
+version = "1.0.0"
+authors = ["regomne <fallingsunz@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = "2"
+thiserror = "1"
+byteorder="1"
+libflate = "0"
+regex = "1"
+mersenne_twister = "1"
+rand = "0"
+walkdir = "2"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["minwindef", "minwinbase", "fileapi", "winnt", "handleapi", "sysinfoapi", "timezoneapi"] }
