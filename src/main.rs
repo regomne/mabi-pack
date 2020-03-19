@@ -236,7 +236,7 @@ fn main() {
         )
         .get_matches();
 
-    match if let Some(matches) = args.subcommand_matches("list") {
+    let ret = match if let Some(matches) = args.subcommand_matches("list") {
         list::run_list(
             matches.value_of("input").unwrap(),
             matches.value_of("output"),
@@ -267,4 +267,5 @@ fn main() {
         }
         _ => 0,
     };
+    std::process::exit(ret);
 }
