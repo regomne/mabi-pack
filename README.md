@@ -39,8 +39,6 @@ To pack files with version 400:
 mabi-pack pack -i D:\mydata -o D:\Mabinogi\package\mypack.pack -k 400
 ```
 
-*Note that the program works in any operating system, but it can't write the timestamps info when packing except in Windows.*
-
 To list all files with version info:
 
 ```

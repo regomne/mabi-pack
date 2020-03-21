@@ -36,6 +36,9 @@ pub enum MabiError {
     #[error("compress error: {0}")]
     CompressError(String),
 
+    #[error("file time error")]
+    TimeError,
+
     #[error("reading header fail: {0}")]
     ReadHeaderFail(String),
 
@@ -149,7 +152,7 @@ pub fn read_index(
 
 fn main() {
     let args = App::new("Mabinogi pack utilities")
-        .version("1.0")
+        .version("1.1")
         .author("regomne <fallingsunz@gmail.com>")
         .subcommand(
             SubCommand::with_name("pack")

@@ -1,5 +1,5 @@
 use super::{read_header, read_index, MabiError};
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{self, BufReader, Write};
 
 pub fn run_list(fname: &str, output: Option<&str>, has_version: bool) -> Result<(), MabiError> {
@@ -11,7 +11,10 @@ pub fn run_list(fname: &str, output: Option<&str>, has_version: bool) -> Result<
 
     let output_stream: Result<Box<dyn Write>, MabiError> =
         output.map_or(Ok(Box::new(io::stdout())), |path| {
-            File::create(path)
+            OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open(path)
                 .map(|f| Box::new(f) as Box<dyn Write>)
                 .map_err(|e| MabiError::IoFail(e))
         });

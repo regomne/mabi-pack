@@ -3,7 +3,7 @@ use libflate::zlib;
 use mersenne_twister::MT19937;
 use rand::{Rng, SeedableRng};
 use regex::Regex;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Cursor, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
@@ -22,7 +22,7 @@ fn write_file(root_dir: &str, rel_path: &str, content: Vec<u8>) -> Result<(), Ma
         fname.to_string_lossy().into_owned(),
     ))?;
     std::fs::create_dir_all(par)?;
-    let mut fs = File::create(fname)?;
+    let mut fs = OpenOptions::new().create(true).write(true).open(fname)?;
     fs.write_all(&content)?;
     Ok(())
 }

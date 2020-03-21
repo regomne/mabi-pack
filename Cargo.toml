@@ -1,6 +1,6 @@
 [package]
 name = "mabi-pack"
-version = "1.0.0"
+version = "1.1.0"
 authors = ["regomne <fallingsunz@gmail.com>"]
 edition = "2018"
 
@@ -15,6 +15,3 @@ regex = "1"
 mersenne_twister = "1"
 rand = "0.4"
 walkdir = "2"
-
-[target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["minwindef", "minwinbase", "fileapi", "winnt", "handleapi", "sysinfoapi", "timezoneapi"] }

@@ -3,9 +3,10 @@ use byteorder::{LittleEndian, WriteBytesExt};
 use libflate::zlib;
 use mersenne_twister::MT19937;
 use rand::{Rng, SeedableRng};
-use std::fs::File;
-use std::io::{self, BufWriter, Read, Seek, SeekFrom, Write};
+use std::fs::{metadata, File, OpenOptions};
+use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, MAIN_SEPARATOR};
+use std::time::{SystemTime, UNIX_EPOCH};
 use walkdir::WalkDir;
 
 fn pack_file(root_dir: &str, rel_path: &str, key: u32) -> Result<(FileInfo, Vec<u8>), MabiError> {
@@ -76,59 +77,25 @@ fn write_str_block(stm: &mut impl Write, s: &str) -> Result<u64, MabiError> {
     Ok(all_len as u64)
 }
 
-#[cfg(target_os = "windows")]
-fn write_file_time(stm: &mut impl Write, root_dir: &str, rel_path: &str) -> Result<(), MabiError> {
-    use std::mem::MaybeUninit;
-    use std::os::windows::ffi::OsStrExt;
-    use std::ptr::null_mut;
-    use std::slice::from_raw_parts;
-    use winapi::shared::minwindef::FILETIME;
-    use winapi::um::fileapi::{CreateFileW, GetFileTime, OPEN_EXISTING};
-    use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
-    use winapi::um::winnt::{FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, GENERIC_READ};
-
-    let fname = Path::new(root_dir).join(rel_path);
-    let fname: Vec<u16> = fname
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect();
-    unsafe {
-        let mut create_time: FILETIME = MaybeUninit::uninit().assume_init();
-        let mut access_time: FILETIME = MaybeUninit::uninit().assume_init();
-        let mut write_time: FILETIME = MaybeUninit::uninit().assume_init();
-        let hf = CreateFileW(
-            fname.as_ptr(),
-            GENERIC_READ,
-            FILE_SHARE_READ,
-            null_mut(),
-            OPEN_EXISTING,
-            FILE_ATTRIBUTE_NORMAL,
-            null_mut(),
-        );
-        if hf == INVALID_HANDLE_VALUE {
-            return Err(MabiError::IoFail(io::Error::new(
-                io::ErrorKind::Other,
-                "can't open file",
-            )));
-        }
-        GetFileTime(hf, &mut create_time, &mut access_time, &mut write_time);
-        let size = std::mem::size_of::<FILETIME>();
-        stm.write_all(from_raw_parts(&create_time as *const _ as *const u8, size))?;
-        stm.write_all(from_raw_parts(&create_time as *const _ as *const u8, size))?;
-        stm.write_all(from_raw_parts(&access_time as *const _ as *const u8, size))?;
-        stm.write_all(from_raw_parts(&write_time as *const _ as *const u8, size))?;
-        stm.write_all(from_raw_parts(&write_time as *const _ as *const u8, size))?;
-        CloseHandle(hf);
-    }
-    Ok(())
+fn time_to_filetime(t: SystemTime) -> Result<u64, MabiError> {
+    let t = t
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| MabiError::TimeError)?
+        .as_millis();
+    Ok(((t * 10000) + 116444736000000000) as u64)
 }
 
-#[cfg(target_os = "unix")]
 fn write_file_time(stm: &mut impl Write, root_dir: &str, rel_path: &str) -> Result<(), MabiError> {
-    for _ in 0..40 {
-        stm.write_u8(0)?;
-    }
+    let meta = metadata(Path::new(root_dir).join(rel_path))?;
+    // As creation time is not supported in WSL, replace it with modified time
+    //let c_time = time_to_filetime(meta.created()?)?;
+    let a_time = time_to_filetime(meta.accessed()?)?;
+    let m_time = time_to_filetime(meta.modified()?)?;
+    stm.write_u64::<LittleEndian>(m_time)?;
+    stm.write_u64::<LittleEndian>(m_time)?;
+    stm.write_u64::<LittleEndian>(a_time)?;
+    stm.write_u64::<LittleEndian>(m_time)?;
+    stm.write_u64::<LittleEndian>(m_time)?;
     Ok(())
 }
 
@@ -148,28 +115,10 @@ fn write_file_entry(
     Ok(str_block_size + 0x40)
 }
 
-#[cfg(target_os = "windows")]
 fn write_header_time(stm: &mut impl Write) -> Result<(), MabiError> {
-    use std::mem::MaybeUninit;
-    use std::slice::from_raw_parts;
-    use winapi::shared::minwindef::FILETIME;
-    use winapi::um::minwinbase::SYSTEMTIME;
-    use winapi::um::sysinfoapi::GetSystemTime;
-    use winapi::um::timezoneapi::SystemTimeToFileTime;
-    unsafe {
-        let mut sys_time: SYSTEMTIME = MaybeUninit::uninit().assume_init();
-        GetSystemTime(&mut sys_time);
-        let mut file_time: FILETIME = MaybeUninit::uninit().assume_init();
-        SystemTimeToFileTime(&sys_time, &mut file_time);
-        let size = std::mem::size_of::<FILETIME>();
-        stm.write_all(from_raw_parts(&file_time as *const _ as *const u8, size))?;
-        stm.write_all(from_raw_parts(&file_time as *const _ as *const u8, size))?;
-    }
-    Ok(())
-}
-
-#[cfg(target_os = "unix")]
-fn write_header_time(_: &mut impl Write) -> Result<(), MabiError> {
+    let cur = time_to_filetime(SystemTime::now())?;
+    stm.write_u64::<LittleEndian>(cur)?;
+    stm.write_u64::<LittleEndian>(cur)?;
     Ok(())
 }
 
@@ -189,40 +138,6 @@ fn write_header(stm: &mut impl Write, head_info: &HeadInfo) -> Result<(), MabiEr
     Ok(())
 }
 
-/*
-fn find_lcs_length(b1: &[u8], b2: &[u8]) -> usize {
-    let min_len = if b1.len() < b2.len() {
-        b1.len()
-    } else {
-        b2.len()
-    };
-    for i in 0..min_len {
-        if b1[i] != b2[i] {
-            return i;
-        }
-    }
-    min_len
-}
-
-fn file_first_cmp_routine(s1: &String, s2: &String) -> Ordering {
-    let b1 = s1.as_bytes();
-    let b2 = s2.as_bytes();
-    let eq_len = find_lcs_length(b1, b2);
-    let b1 = &b1[eq_len..];
-    let b2 = &b2[eq_len..];
-    let b1_has_dir = b1.contains(&(MAIN_SEPARATOR as u32 as u8));
-    let b2_has_dir = b2.contains(&(MAIN_SEPARATOR as u32 as u8));
-
-    if b1_has_dir && !b2_has_dir {
-        Ordering::Greater
-    } else if !b1_has_dir && b2_has_dir {
-        Ordering::Less
-    } else {
-        b1.partial_cmp(&b2).unwrap()
-    }
-}
-*/
-
 pub fn run_pack(input_folder: &str, output_fname: &str, version: &str) -> Result<(), MabiError> {
     let version = version
         .parse::<u32>()
@@ -234,14 +149,16 @@ pub fn run_pack(input_folder: &str, output_fname: &str, version: &str) -> Result
         .map(|e| get_rel_path(input_folder, e.into_path().to_str().unwrap()))
         .collect::<Result<Vec<String>, MabiError>>()
         .map_err(|e| MabiError::TraversingFail(e.to_string()))?;
-    //file_names.sort_by(file_first_cmp_routine);
 
     let index_size: u64 = file_names
         .iter()
         .map(|s| calc_str_size(s.as_bytes().len()).0 + 0x40)
         .sum::<usize>() as u64;
 
-    let fs = File::create(output_fname)?;
+    let fs = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(output_fname)?;
     let mut stm = BufWriter::new(fs);
     stm.write_all(&[0; HEADER_SIZE as usize])?;
     let content_start_off = HEADER_SIZE + index_size;
