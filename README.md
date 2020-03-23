@@ -2,6 +2,8 @@
 
 Pack utilities for Mabinogi.
 
+Can run both in Windows and \*nix/MacOS.
+
 ## Build
 
 Use rust 1.39 or above.
