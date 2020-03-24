@@ -152,7 +152,7 @@ pub fn read_index(
 
 fn main() {
     let args = App::new("Mabinogi pack utilities")
-        .version("1.1")
+        .version("1.1.1")
         .author("regomne <fallingsunz@gmail.com>")
         .subcommand(
             SubCommand::with_name("pack")

@@ -5,7 +5,7 @@ use rand::{Rng, SeedableRng};
 use regex::Regex;
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Cursor, Read, Seek, SeekFrom, Write};
-use std::path::Path;
+use std::path::{Path, MAIN_SEPARATOR};
 
 fn make_regex(strs: Vec<&str>) -> Result<Vec<Regex>, MabiError> {
     strs.into_iter()
@@ -17,7 +17,7 @@ fn make_regex(strs: Vec<&str>) -> Result<Vec<Regex>, MabiError> {
 }
 
 fn write_file(root_dir: &str, rel_path: &str, content: Vec<u8>) -> Result<(), MabiError> {
-    let fname = Path::new(root_dir).join(rel_path);
+    let fname = Path::new(root_dir).join(rel_path.replace("\\", &MAIN_SEPARATOR.to_string()));
     let par = fname.parent().ok_or(MabiError::UnrecognizedPath(
         fname.to_string_lossy().into_owned(),
     ))?;
