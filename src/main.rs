@@ -265,7 +265,7 @@ fn main() {
         Ok(())
     } {
         Err(e) => {
-            println!("Err: {}", e);
+            println!("Err: {:?}", e);
             1
         }
         _ => 0,
